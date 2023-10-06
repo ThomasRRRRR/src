@@ -1,0 +1,146 @@
+package com.lineage.server.model.skill.skillmode;
+
+import static com.lineage.server.model.skill.L1SkillId.SHOCK_STUN;
+
+import com.lineage.config.ConfigSkill;
+import com.lineage.server.model.L1Character;
+import com.lineage.server.model.L1Magic;
+import com.lineage.server.model.Instance.L1GuardInstance;
+import com.lineage.server.model.Instance.L1GuardianInstance;
+import com.lineage.server.model.Instance.L1MonsterInstance;
+import com.lineage.server.model.Instance.L1NpcInstance;
+import com.lineage.server.model.Instance.L1PcInstance;
+import com.lineage.server.model.Instance.L1PetInstance;
+import com.lineage.server.model.Instance.L1SummonInstance;
+import com.lineage.server.model.skill.L1SkillId;
+import com.lineage.server.serverpackets.S_Paralysis;
+import com.lineage.server.serverpackets.S_ServerMessage;
+import com.lineage.server.utils.L1SpawnUtil;
+
+import java.util.Random;
+
+/**
+ * 衝擊之暈
+ * 
+ * @author dexc
+ * 
+ */
+public class SHOCK_STUN extends SkillMode {
+
+	public SHOCK_STUN() {
+	}
+
+	@Override
+	public int start(final L1PcInstance srcpc, final L1Character cha,
+			final L1Magic magic, final int integer) throws Exception {
+		final int dmg = 0;
+		Random random = new Random();
+		String[] sec = ConfigSkill.SHOCK_STUN_TIMER.split("~");
+		
+		int shock = 0;
+		
+		if (srcpc.getInventory().checkItem(150001,1)) {
+		shock = random.nextInt(Integer.valueOf(5).intValue()
+				- Integer.valueOf(2).intValue() + 1)
+				+ Integer.valueOf(2).intValue();
+		} else {
+		shock = random.nextInt(Integer.valueOf(sec[1]).intValue()
+				- Integer.valueOf(sec[0]).intValue() + 1)
+				+ Integer.valueOf(sec[0]).intValue(); 
+		}
+		
+		// 取回目標是否已被施展衝暈
+		if ((cha instanceof L1PcInstance) && cha.hasSkillEffect(SHOCK_STUN)) {
+			shock += cha.getSkillEffectTimeSec(SHOCK_STUN);// 累計時間
+		}
+
+		if (shock > 8) {// 最大衝暈時間8秒
+			shock = 8;
+		}
+
+		cha.setSkillEffect(L1SkillId.SHOCK_STUN, shock * 1000);
+		// 騎士技能(衝擊之暈)
+		L1SpawnUtil.spawnEffect(81162, shock, cha.getX(), cha.getY(),
+				cha.getMapId(), cha, 0);
+
+//		if (srcpc.isGm()) {
+//		srcpc.sendPackets(new S_ServerMessage("此次衝暈秒數為" + shock + "秒.."));
+//		}
+		
+		if (cha instanceof L1PcInstance) {
+			final L1PcInstance pc = (L1PcInstance) cha;
+			pc.sendPackets(new S_Paralysis(S_Paralysis.TYPE_STUN, true));
+
+		} else if ((cha instanceof L1MonsterInstance)
+				|| (cha instanceof L1SummonInstance)
+				|| (cha instanceof L1PetInstance)) {
+			final L1NpcInstance tgnpc = (L1NpcInstance) cha;
+			tgnpc.setParalyzed(true);
+		}
+
+		return dmg;
+	}
+
+	@Override
+	public int start(final L1NpcInstance npc, final L1Character cha,
+			final L1Magic magic, final int integer) throws Exception {
+		final int dmg = 0;
+		// final int[] stunTimeArray = { 500, 1000, 1500, 2000, 2500, 3000 };
+		// final int[] stunTimeArray = { 1, 2, 3 };// 技能時間(秒)
+
+		final Random random = new Random();
+		int shock = random.nextInt(2) + 2;// 隨機時間2~3
+
+		// 取回目標是否已被施展衝暈
+		if ((cha instanceof L1PcInstance) && cha.hasSkillEffect(SHOCK_STUN)) {
+			shock += cha.getSkillEffectTimeSec(SHOCK_STUN);// 累計時間
+		}
+
+		if (shock > 6) {// 最大衝暈時間6秒
+			shock = 6;
+		}
+
+		cha.setSkillEffect(L1SkillId.SHOCK_STUN, shock * 1000);
+		// 騎士技能(衝擊之暈)
+		L1SpawnUtil.spawnEffect(81162, shock, cha.getX(), cha.getY(),
+				cha.getMapId(), cha, 0);
+
+		if (cha instanceof L1PcInstance) {
+			final L1PcInstance pc = (L1PcInstance) cha;
+			pc.sendPackets(new S_Paralysis(S_Paralysis.TYPE_STUN, true));
+
+		} else if ((cha instanceof L1MonsterInstance)
+				|| (cha instanceof L1SummonInstance)
+				|| (cha instanceof L1GuardianInstance)
+				|| (cha instanceof L1GuardInstance)
+				|| (cha instanceof L1PetInstance)) {
+			final L1NpcInstance tgnpc = (L1NpcInstance) cha;
+			tgnpc.setParalyzed(true);
+		}
+
+		return dmg;
+	}
+
+	@Override
+	public void start(final L1PcInstance srcpc, final Object obj)
+			throws Exception {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void stop(final L1Character cha) throws Exception {
+		if (cha instanceof L1PcInstance) {
+			final L1PcInstance pc = (L1PcInstance) cha;
+			pc.sendPackets(new S_Paralysis(S_Paralysis.TYPE_STUN, false));
+
+		} else if ((cha instanceof L1MonsterInstance)
+				|| (cha instanceof L1SummonInstance)
+				|| (cha instanceof L1GuardianInstance)
+				|| (cha instanceof L1GuardInstance)
+				|| (cha instanceof L1PetInstance)) {
+			final L1NpcInstance npc = (L1NpcInstance) cha;
+			npc.setParalyzed(false);
+		}
+	}
+}
