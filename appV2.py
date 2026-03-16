@@ -153,7 +153,7 @@ st.subheader(f"📺 {symbol} 實時盤面觀測")
 
 # 建立 TradingView 外掛的 HTML 代碼
 tv_widget_html = f"""
-<div class="tradingview-widget-container" style="height:500px;">
+<div class="tradingview-widget-container" style="height:2000px;">
   <div id="tradingview_chart"></div>
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="text/javascript">
