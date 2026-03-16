@@ -3,8 +3,10 @@ import plotly.graph_objects as go
 from tradingview_ta import TA_Handler, Interval
 
 # --- 頁面配置 ---
-st.set_page_config(page_title="阿棠專業交易助手", layout="wide")
-st.title("📈 阿棠專業交易計算器 v3.0")
+st.set_page_config(page_title="阿棠交易計算器", page_icon="📈")
+
+st.title("📊 阿棠交易型態計算器")
+st.caption("支持 W/M 型態、頭肩型態與倉位風險控管")
 
 # --- 側邊欄：商品與帳戶設定 ---
 with st.sidebar:
