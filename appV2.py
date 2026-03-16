@@ -29,7 +29,7 @@ st.caption("支援 W/M 型態、頭肩型態、即時報價與視覺化計畫")
 # --- 2. 側邊欄：行情與帳戶 ---
 with st.sidebar:
     st.header("🔍 行情連線設置")
-    market_type = st.selectbox("市場類型", ["crypto", "america", "forex"], help="加密貨幣、美股、外匯")
+    market_type = st.selectbox("市場類型", ["crypto", "america", "forex", "TWSE"], help="加密貨幣、美股、外匯、台股")
     symbol = st.text_input("商品代碼", value="BTCUSDT").upper()
     exchange = st.text_input("交易所", value="BINANCE").upper()
     
@@ -63,14 +63,14 @@ with c1:
 
 with c2:
     st.subheader("📏 關鍵價位")
-    b1 = st.number_input("底部 / 頂部 (B1)", value=60000.0, format="%.2f")
-    b2 = st.number_input("頸線 (B2)", value=65000.0, format="%.2f")
+    b1 = st.number_input("底部 / 頂部 ", value=60000.0, format="%.2f")
+    b2 = st.number_input("頸線 ", value=65000.0, format="%.2f")
 
 with c3:
     st.subheader("🎯 進場與止損")
     # 自動帶入抓取的價格
     current_val = st.session_state.get('current_price', 65500.0)
-    b3 = st.number_input("進場價 (B3)", value=float(current_val), format="%.2f")
+    b3 = st.number_input("進場價 ", value=float(current_val), format="%.2f")
     
     auto_sl = (b1 + b2) / 2
     sl_input = st.number_input(f"自定止損 (建議: {auto_sl:.2f})", value=0.0, format="%.2f")
@@ -146,3 +146,34 @@ with chart_col:
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # --- 6. 新增：TradingView 實時 K 線圖外掛 ---
+st.divider()
+st.subheader(f"📺 {symbol} 實時盤面觀測")
+
+# 建立 TradingView 外掛的 HTML 代碼
+tv_widget_html = f"""
+<div class="tradingview-widget-container" style="height:500px;">
+  <div id="tradingview_chart"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script type="text/javascript">
+  new TradingView.widget({{
+    "autosize": true,
+    "symbol": "{exchange}:{symbol}",
+    "interval": "60",
+    "timezone": "Etc/UTC",
+    "theme": "dark",
+    "style": "1",
+    "locale": "zh_TW",
+    "toolbar_bg": "#f1f3f6",
+    "enable_publishing": false,
+    "allow_symbol_change": true,
+    "container_id": "tradingview_chart"
+  }});
+  </script>
+</div>
+"""
+
+# 使用 streamlit.components 顯示 HTML
+import streamlit.components.v1 as components
+components.html(tv_widget_html, height=520)
