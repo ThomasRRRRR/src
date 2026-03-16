@@ -2,90 +2,147 @@ import streamlit as st
 import plotly.graph_objects as go
 from tradingview_ta import TA_Handler, Interval
 
-# --- 頁面配置 ---
-st.set_page_config(page_title="阿棠交易計算器", page_icon="📈")
+# --- 1. 頁面基礎配置 ---
+st.set_page_config(
+    page_title="阿棠專業交易助手",
+    page_icon="📈",
+    layout="wide"
+)
 
-st.title("📊 阿棠交易型態計算器")
-st.caption("支持 W/M 型態、頭肩型態與倉位風險控管")
+# 自定義 CSS 美化
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    stMetric {
+        background-color: #1e2130;
+        padding: 15px;
+        border-radius: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 側邊欄：商品與帳戶設定 ---
+st.title("📊 阿棠專業交易型態計算器 v3.0")
+st.caption("支援 W/M 型態、頭肩型態、即時報價與視覺化計畫")
+
+# --- 2. 側邊欄：行情與帳戶 ---
 with st.sidebar:
-    st.header("🔍 行情連線")
-    market_type = st.selectbox("市場類型", ["crypto", "america", "forex"])
-    symbol = st.text_input("商品代碼 (例如: BTCUSDT, AAPL, EURUSD)", value="BTCUSDT").upper()
-    exchange = st.text_input("交易所 (例如: BINANCE, NASDAQ, FX_IDC)", value="BINANCE").upper()
+    st.header("🔍 行情連線設置")
+    market_type = st.selectbox("市場類型", ["crypto", "america", "forex"], help="加密貨幣、美股、外匯")
+    symbol = st.text_input("商品代碼", value="BTCUSDT").upper()
+    exchange = st.text_input("交易所", value="BINANCE").upper()
     
     st.divider()
     st.header("💰 帳戶風險控管")
-    balance = st.number_input("帳戶餘額 (USD)", value=10000.0)
-    risk_p = st.slider("每筆風險 (%)", 0.5, 5.0, 1.0, 0.5)
+    balance = st.number_input("帳戶餘額 (USD)", value=10000.0, step=100.0)
+    risk_p = st.slider("每筆交易風險 (%)", 0.1, 5.0, 1.0, 0.1)
     
-    if st.button("🔄 抓取即時價格"):
+    # 抓取價格按鈕
+    if st.button("🔄 獲取即時價格", use_container_width=True):
         try:
-            handler = TA_Handler(symbol=symbol, screener=market_type, exchange=exchange, interval=Interval.INTERVAL_1_HOUR)
+            handler = TA_Handler(
+                symbol=symbol,
+                screener=market_type,
+                exchange=exchange,
+                interval=Interval.INTERVAL_1_HOUR
+            )
             analysis = handler.get_analysis()
             st.session_state.current_price = analysis.indicators["open"]
-            st.success(f"成功抓取！當前價格: {st.session_state.current_price}")
+            st.success(f"抓取成功！價格: {st.session_state.current_price}")
         except Exception as e:
-            st.error(f"抓取失敗，請檢查代碼或交易所名稱")
+            st.error("連線失敗，請檢查代碼或交易所是否正確。")
 
-# --- 主界面：輸入區 ---
+# --- 3. 主界面：輸入區域 ---
 c1, c2, c3 = st.columns(3)
+
 with c1:
+    st.subheader("🛠 型態設定")
     pattern = st.selectbox("選擇型態", ["W / M 型態", "頭肩型態"])
     trade_side = st.radio("交易方向", ["多頭 (Long)", "空頭 (Short)"], horizontal=True)
 
 with c2:
-    b1 = st.number_input("底部 / 頂部 ", value=60000.0)
-    b2 = st.number_input("頸線 ", value=65000.0)
-    
-with c3:
-    # 如果有抓到即時價格，預設帶入 B3
-    default_b3 = st.session_state.get('current_price', 65500.0)
-    b3 = st.number_input("進場價 ", value=float(default_b3))
-    sl_input = st.number_input("自定止損 (0 為自動)", value=0.0)
+    st.subheader("📏 關鍵價位")
+    b1 = st.number_input("底部 / 頂部 (B1)", value=60000.0, format="%.2f")
+    b2 = st.number_input("頸線 (B2)", value=65000.0, format="%.2f")
 
-# --- 計算邏輯 ---
+with c3:
+    st.subheader("🎯 進場與止損")
+    # 自動帶入抓取的價格
+    current_val = st.session_state.get('current_price', 65500.0)
+    b3 = st.number_input("進場價 (B3)", value=float(current_val), format="%.2f")
+    
+    auto_sl = (b1 + b2) / 2
+    sl_input = st.number_input(f"自定止損 (建議: {auto_sl:.2f})", value=0.0, format="%.2f")
+    sl = sl_input if sl_input != 0 else auto_sl
+
+# --- 4. 核心計算邏輯 ---
 diff = abs(b2 - b1)
 is_long = "多頭" in trade_side
-sl = sl_input if sl_input != 0 else (b1 + b2) / 2
 
-# 目標計算
+# 根據型態與方向計算目標 (R1, R2, R3)
 if pattern == "頭肩型態":
-    coef = [-1, -1.272, -1.618] if is_long else [1, 1.272, 1.618]
-else: # W/M
-    coef = [1, 1.272, 1.618] if is_long else [-1, -1.272, -1.618]
+    coef = [1.0, 1.272, 1.618]
+    # 頭肩多頭目標往下算(反轉)，頭肩空頭目標往上算(反轉) -> 這裡依據一般技術分析邏輯調整
+    targets = [b3 - (diff * c) if is_long else b3 + (diff * c) for c in coef]
+else: # W/M 型態
+    coef = [1.0, 1.272, 1.618]
+    targets = [b3 + (diff * c) if is_long else b3 - (diff * c) for c in coef]
 
-t1, t2, t3 = [b3 + (diff * c) for c in coef]
-rr_ratio = abs(t1 - b3) / abs(b3 - sl) if b3 != sl else 0
-pos_size = (balance * risk_p / 100) / abs(b3 - sl) if b3 != sl else 0
+t1, t2, t3 = targets
+risk_dist = abs(b3 - sl)
+rr_ratio = abs(t1 - b3) / risk_dist if risk_dist != 0 else 0
+risk_amt = balance * (risk_p / 100)
+pos_size = risk_amt / risk_dist if risk_dist != 0 else 0
 
-# --- 結果展示與圖表 ---
+# --- 5. 結果顯示區域 ---
 st.divider()
 res_col, chart_col = st.columns([1, 2])
 
 with res_col:
-    st.subheader("📋 計算結果")
-    st.metric("建議倉位", f"{pos_size:.4f} 單位")
-    st.write(f"🎯 目標 1: **{t1:.2f}** (RR 1:{rr_ratio:.2f})")
-    st.write(f"🎯 目標 2: **{t2:.2f}**")
-    st.write(f"🎯 目標 3: **{t3:.2f}**")
-    st.error(f"🛑 止損價: **{sl:.2f}**")
+    st.subheader("📋 交易計畫摘要")
     
+    st.metric("建議倉位大小", f"{pos_size:.4f} 單位")
+    st.write(f"💵 每筆風險金額: `${risk_amt:.2f}`")
+    st.write(f"⚖️ 風險報酬比: `1 : {rr_ratio:.2f}`")
+    
+    st.markdown("---")
+    st.write(f"🎯 目標 1 (1.000): **{t1:.2f}**")
+    st.write(f"🎯 目標 2 (1.272): **{t2:.2f}**")
+    st.write(f"🎯 目標 3 (1.618): **{t3:.2f}**")
+    st.markdown(f"🛑 止損價位: <span style='color:red; font-weight:bold;'>{sl:.2f}</span>", unsafe_allow_html=True)
+
     if rr_ratio >= 1.5:
-        st.success("✅ 盈虧比達標，可以考慮！")
+        st.success("✅ 盈虧比良好，建議執行")
     else:
-        st.warning("⚠️ 盈虧比過低，請謹慎。")
+        st.warning("⚠️ 盈虧比較低，請斟酌風險")
 
 with chart_col:
-    # 建立視覺化圖表
+    # 繪製 Plotly 圖表
     fig = go.Figure()
-    # 繪製進場、止損、目標線
-    fig.add_hline(y=b3, line_dash="dash", line_color="blue", annotation_text="進場 (B3)")
-    fig.add_hline(y=sl, line_dash="dot", line_color="red", annotation_text="止損 (SL)")
-    fig.add_hline(y=t1, line_color="green", annotation_text="目標 1")
-    fig.add_hline(y=t3, line_color="darkgreen", annotation_text="目標 3")
+
+    # 加入隱藏點以支撐座標軸顯示
+    y_min = min(sl, t3, b3, b1) * 0.99
+    y_max = max(sl, t3, b3, b1) * 1.01
+    fig.add_trace(go.Scatter(x=[0, 10], y=[y_min, y_max], mode="markers", marker=dict(opacity=0), showlegend=False))
+
+    # 繪製水平參考線
+    fig.add_hline(y=b3, line_dash="dash", line_color="#3498db", annotation_text="進場 (B3)", annotation_position="top left")
+    fig.add_hline(y=sl, line_dash="dot", line_color="#e74c3c", annotation_text="止損 (SL)", annotation_position="bottom left")
+    fig.add_hline(y=t1, line_color="#2ecc71", annotation_text="目標 1", annotation_position="top right")
+    fig.add_hline(y=t3, line_color="#1abc9c", annotation_text="目標 3 (最大獲利)", annotation_position="bottom right")
+
+    # 填滿獲利區與止損區
+    fig.add_hrect(y0=b3, y1=t3, fillcolor="green", opacity=0.1, line_width=0)
+    fig.add_hrect(y0=b3, y1=sl, fillcolor="red", opacity=0.1, line_width=0)
+
+    fig.update_layout(
+        title=f"{symbol} 計畫視覺化預覽",
+        height=500,
+        template="plotly_dark",
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(title="價格價格 (Price)", showgrid=True, gridcolor="#333"),
+        margin=dict(l=20, r=20, t=50, b=20)
+    )
     
-    # 設定圖表樣式
-    fig.update_layout(title=f"{symbol} 交易計畫視覺化", height=400, template="plotly_dark")
     st.plotly_chart(fig, use_container_width=True)
